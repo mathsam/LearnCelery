@@ -1,8 +1,9 @@
 from celery import Celery
+import celeryconfig
 import numpy as np
 
-app = Celery('tasks', broker='amqp://junyic:0714@node00:5672/myvhost',
-        backend='rpc://')
+app = Celery('tasks')
+app.config_from_object(celeryconfig)
 
 
 import time
@@ -18,3 +19,20 @@ def exhaust_ram(s, t):
     if t>0:
         time.sleep(t)
     return None
+
+import random
+
+
+@app.task(bind=True, default_retry_delay=10, max_retries=10)
+def test_retry(self, upper_limit):
+    try:
+        randint = random.randint(0, upper_limit)
+        if randint != 0:
+            raise RuntimeError('n is %d' %randint)
+        else:
+            print('Success')
+            return 0
+    except RuntimeError as e:
+        raise self.retry(exc=e, countdown=2**self.request.retries)
+
+sum = app.task(np.sum)
